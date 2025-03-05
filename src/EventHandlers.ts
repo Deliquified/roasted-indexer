@@ -105,6 +105,12 @@ Roasted.RoastPriceSet.handler(async ({ event, context }) => {
 Roasted.RoastTipped.handler(async ({ event, context }) => {
   const roaster = await getOrCreateUser(event.params.roaster, context);
   const token = await getOrCreateToken(event.params.tokenId.toString(), event.params.roaster, context);
+  const roast = await context.Roast.get(event.params.tokenId.toString());
+
+  if (!roast) {
+    console.log(`Warning: Roast ${event.params.tokenId.toString()} not found for tip`);
+    return;
+  }
 
   // Update roaster's contract balance from the tip
   roaster.currentBalance = roaster.currentBalance + event.params.amount;
@@ -116,8 +122,13 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
   token.lastUpdatedBlock = event.block.number;
   token.lastUpdatedTimestamp = event.block.timestamp;
 
+  // Update roast's tip stats
+  roast.totalTips = roast.totalTips + event.params.amount;
+  roast.tipCount = roast.tipCount + 1;
+
   await context.User.set(roaster);
   await context.RoastedToken.set(token);
+  await context.Roast.set(roast);
 
   // Store the tip event
   const tip = {
@@ -129,6 +140,7 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
     blockNumber: event.block.number,
     timestamp: event.block.timestamp,
     transactionHash: event.transaction.hash,
+    roast: event.params.tokenId.toString(),
   };
 
   await context.Tip.set(tip);

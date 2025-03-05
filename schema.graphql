@@ -103,6 +103,7 @@ type Tip @entity {
   blockNumber: Int!
   timestamp: Int!
   transactionHash: String!
+  roast: Roast! # Add reference to the roast
 }
 
 type Roast @entity {
