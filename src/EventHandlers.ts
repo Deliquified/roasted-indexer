@@ -148,7 +148,7 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
     blockNumber: event.block.number,
     timestamp: event.block.timestamp,
     roast_id: event.params.tokenId.toString(),
-    transactionHash: event.transaction.hash,
+    transactionHash: event.transactionHash,
   };
 
   await context.Tip.set(tip);
@@ -241,7 +241,7 @@ Roasted.Withdrawal.handler(async ({ event, context }) => {
     amount: event.params.amount,
     blockNumber: event.block.number,
     timestamp: event.block.timestamp,
-    transactionHash: event.transaction.hash,
+    transactionHash: event.transactionHash,
   };
 
   await context.Withdrawal.set(withdrawal);
