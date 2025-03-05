@@ -1,14 +1,21 @@
 /*
  * Please refer to https://docs.envio.dev for a thorough guide on all Envio indexer features
  */
-import { Roasted } from "generated";
+import {
+  Roasted,
+  Roasted_DataChanged,
+  Roasted_OperatorAuthorizationChanged,
+  Roasted_OperatorRevoked,
+  Roasted_OwnershipTransferred,
+  Roasted_RoastPriceSet,
+  Roasted_RoastTipped,
+  Roasted_TokenIdDataChanged,
+  Roasted_Transfer,
+  Roasted_UserRoasted,
+  Roasted_Withdrawal,
+} from "generated";
 
-// Constants
-const LSP4_METADATA_KEY = "0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e";
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const TIP_AMOUNT = BigInt("10000000000000000"); // 0.01 ether
-
-// Helper function to get or create a user
+// Helper function to get or create a User entity
 async function getOrCreateUser(context: any, address: string) {
   let user = await context.User.get(address);
   if (!user) {
@@ -26,8 +33,194 @@ async function getOrCreateUser(context: any, address: string) {
   return user;
 }
 
-// Helper function to get or create global stats
-async function getOrCreateGlobalStats(context: any) {
+// Helper function to get or create a Roast entity
+async function getOrCreateRoast(context: any, tokenId: string, roaster: string, roastee: string, amount: bigint) {
+  let roast = await context.Roast.get(tokenId);
+  if (!roast) {
+    const roasterUser = await getOrCreateUser(context, roaster);
+    const roasteeUser = await getOrCreateUser(context, roastee);
+    roast = {
+      id: tokenId,
+      roaster: roasterUser,
+      roastee: roasteeUser,
+      owner: roasterUser, // Initially owned by roaster
+      ipfsHash: "", // Will be set via TokenIdDataChanged event
+      totalTips: BigInt(0),
+      tipCount: 0,
+      createdAt: BigInt(Date.now()),
+      amount: amount
+    };
+    await context.Roast.set(roast);
+  }
+  return roast;
+}
+
+Roasted.DataChanged.handler(async ({ event, context }) => {
+  const entity: Roasted_DataChanged = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    dataKey: event.params.dataKey,
+    dataValue: event.params.dataValue,
+  };
+
+  context.Roasted_DataChanged.set(entity);
+});
+
+Roasted.OperatorAuthorizationChanged.handler(async ({ event, context }) => {
+  const entity: Roasted_OperatorAuthorizationChanged = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    operator: event.params.operator,
+    tokenOwner: event.params.tokenOwner,
+    tokenId: event.params.tokenId,
+    operatorNotificationData: event.params.operatorNotificationData,
+  };
+
+  context.Roasted_OperatorAuthorizationChanged.set(entity);
+});
+
+Roasted.OperatorRevoked.handler(async ({ event, context }) => {
+  const entity: Roasted_OperatorRevoked = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    operator: event.params.operator,
+    tokenOwner: event.params.tokenOwner,
+    tokenId: event.params.tokenId,
+    notified: event.params.notified,
+    operatorNotificationData: event.params.operatorNotificationData,
+  };
+
+  context.Roasted_OperatorRevoked.set(entity);
+});
+
+Roasted.OwnershipTransferred.handler(async ({ event, context }) => {
+  const entity: Roasted_OwnershipTransferred = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    previousOwner: event.params.previousOwner,
+    newOwner: event.params.newOwner,
+  };
+
+  context.Roasted_OwnershipTransferred.set(entity);
+});
+
+Roasted.RoastPriceSet.handler(async ({ event, context }) => {
+  const entity: Roasted_RoastPriceSet = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    user: event.params.user,
+    price: event.params.price,
+  };
+
+  // Update user's roast price
+  const user = await getOrCreateUser(context, event.params.user);
+  user.roastPrice = event.params.price;
+  await context.User.set(user);
+
+  context.Roasted_RoastPriceSet.set(entity);
+});
+
+Roasted.RoastTipped.handler(async ({ event, context }) => {
+  const entity: Roasted_RoastTipped = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    tokenId: event.params.tokenId,
+    tipper: event.params.tipper,
+    roaster: event.params.roaster,
+    amount: event.params.amount,
+  };
+
+  // Update roast tips
+  const roast = await context.Roast.get(event.params.tokenId);
+  if (roast) {
+    roast.totalTips = roast.totalTips + event.params.amount;
+    roast.tipCount += 1;
+    await context.Roast.set(roast);
+
+    // Create tip entity
+    const tip = {
+      id: `${event.params.tokenId}_${event.params.tipper}_${event.block.timestamp}`,
+      roast: roast,
+      tipper: await getOrCreateUser(context, event.params.tipper),
+      amount: event.params.amount,
+      timestamp: BigInt(event.block.timestamp)
+    };
+    await context.Tip.set(tip);
+  }
+
+  context.Roasted_RoastTipped.set(entity);
+});
+
+Roasted.TokenIdDataChanged.handler(async ({ event, context }) => {
+  const entity: Roasted_TokenIdDataChanged = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    tokenId: event.params.tokenId,
+    dataKey: event.params.dataKey,
+    dataValue: event.params.dataValue,
+  };
+
+  // Update roast metadata
+  const metadata = {
+    id: `${event.params.tokenId}_${event.params.dataKey}`,
+    roast: await context.Roast.get(event.params.tokenId),
+    dataKey: event.params.dataKey,
+    dataValue: event.params.dataValue
+  };
+  await context.RoastMetadata.set(metadata);
+
+  context.Roasted_TokenIdDataChanged.set(entity);
+});
+
+Roasted.Transfer.handler(async ({ event, context }) => {
+  const entity: Roasted_Transfer = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    operator: event.params.operator,
+    from: event.params.from,
+    to: event.params.to,
+    tokenId: event.params.tokenId,
+    force: event.params.force,
+    data: event.params.data,
+  };
+
+  // Update NFT balances
+  if (event.params.from !== "0x0000000000000000000000000000000000000000") {
+    const fromUser = await getOrCreateUser(context, event.params.from);
+    fromUser.nftBalance -= 1;
+    await context.User.set(fromUser);
+  }
+
+  const toUser = await getOrCreateUser(context, event.params.to);
+  toUser.nftBalance += 1;
+  await context.User.set(toUser);
+
+  // Update roast ownership
+  const roast = await context.Roast.get(event.params.tokenId);
+  if (roast) {
+    roast.owner = toUser;
+    await context.Roast.set(roast);
+  }
+
+  context.Roasted_Transfer.set(entity);
+});
+
+Roasted.UserRoasted.handler(async ({ event, context }) => {
+  const entity: Roasted_UserRoasted = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    roaster: event.params.roaster,
+    roastee: event.params.roastee,
+    amount: event.params.amount,
+  };
+
+  // Update user stats
+  const roaster = await getOrCreateUser(context, event.params.roaster);
+  const roastee = await getOrCreateUser(context, event.params.roastee);
+
+  roaster.timesRoasting += 1;
+  roastee.timesRoasted += 1;
+  roastee.contractBalance = roastee.contractBalance + event.params.amount;
+
+  await context.User.set(roaster);
+  await context.User.set(roastee);
+
+  // Create roast entity
+  const tokenId = `${event.chainId}_${event.block.number}_${event.logIndex}`;
+  await getOrCreateRoast(context, tokenId, event.params.roaster, event.params.roastee, event.params.amount);
+
+  // Update global stats
   let stats = await context.GlobalStats.get("global");
   if (!stats) {
     stats = {
@@ -37,146 +230,33 @@ async function getOrCreateGlobalStats(context: any) {
       totalVolume: BigInt(0),
       totalWithdrawn: BigInt(0)
     };
-    await context.GlobalStats.set(stats);
   }
-  return stats;
-}
-
-// Helper function to convert bytes32 to hex string
-function bytes32ToHex(bytes32: string): string {
-  return bytes32.startsWith('0x') ? bytes32 : '0x' + bytes32;
-}
-
-// Handle roast price updates
-Roasted.RoastPriceSet.handler(async ({ event, context }) => {
-  const user = await getOrCreateUser(context, event.params.user);
-  user.roastPrice = BigInt(event.params.price);
-  await context.User.set(user);
-});
-
-// Handle new roasts
-Roasted.UserRoasted.handler(async ({ event, context }) => {
-  const roaster = await getOrCreateUser(context, event.params.roaster);
-  const roastee = await getOrCreateUser(context, event.params.roastee);
-  const stats = await getOrCreateGlobalStats(context);
-  
-  // Update roaster stats
-  roaster.timesRoasting += 1;
-  roaster.nftBalance += 1;
-  
-  // Update roastee stats
-  roastee.timesRoasted += 1;
-  roastee.contractBalance += BigInt(event.params.amount) / BigInt(2); // 50% split
-  
-  // Create new roast
-  const roast = {
-    id: event.params.tokenId.toString(),
-    roaster: roaster.id,
-    roastee: roastee.id,
-    owner: roaster.id,
-    ipfsHash: "",
-    totalTips: BigInt(0),
-    tipCount: 0,
-    createdAt: BigInt(event.block.timestamp),
-    amount: BigInt(event.params.amount)
-  };
-  
-  // Update global stats
   stats.totalRoasts += 1;
-  stats.totalVolume += BigInt(event.params.amount);
-  
-  // Save all updates
-  await context.User.set(roaster);
-  await context.User.set(roastee);
-  await context.Roast.set(roast);
+  stats.totalVolume = stats.totalVolume + event.params.amount;
   await context.GlobalStats.set(stats);
+
+  context.Roasted_UserRoasted.set(entity);
 });
 
-// Handle NFT transfers
-Roasted.Transfer.handler(async ({ event, context }) => {
-  const from = await getOrCreateUser(context, event.params.from);
-  const to = await getOrCreateUser(context, event.params.to);
-  
-  // Update NFT balances
-  if (from.id !== ZERO_ADDRESS) {
-    from.nftBalance -= 1;
-    await context.User.set(from);
-  }
-  
-  to.nftBalance += 1;
-  await context.User.set(to);
-  
-  // Update roast ownership
-  const roast = await context.Roast.get(event.params.tokenId.toString());
-  if (roast) {
-    roast.owner = to.id;
-    await context.Roast.set(roast);
-  }
-});
+Roasted.Withdrawal.handler(async ({ event, context }) => {
+  const entity: Roasted_Withdrawal = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    user: event.params.user,
+    amount: event.params.amount,
+  };
 
-// Handle metadata updates
-Roasted.TokenIdDataChanged.handler(async ({ event, context }) => {
-  const tokenId = event.params.tokenId.toString();
-  const dataKey = bytes32ToHex(event.params.dataKey);
+  // Update user balance
+  const user = await getOrCreateUser(context, event.params.user);
+  user.contractBalance = user.contractBalance - event.params.amount;
+  user.totalWithdrawn = user.totalWithdrawn + event.params.amount;
+  await context.User.set(user);
 
-  // Only process LSP4 metadata updates
-  if (dataKey === LSP4_METADATA_KEY) {
-    // Get or create the roast
-    let roast = await context.Roast.get(tokenId);
-    if (roast) {
-      // Update IPFS hash
-      roast.ipfsHash = event.params.dataValue;
-      await context.Roast.set(roast);
-    }
-  }
-});
-
-// Handle tips with more detailed tracking
-Roasted.RoastTipped.handler(async ({ event, context }) => {
-  const tokenId = event.params.tokenId.toString();
-  const roast = await context.Roast.get(tokenId);
-  const roaster = await getOrCreateUser(context, event.params.roaster);
-  const tipper = await getOrCreateUser(context, event.params.tipper);
-  const stats = await getOrCreateGlobalStats(context);
-  
-  if (roast) {
-    // Create new tip record
-    const tipId = `${tokenId}-${event.params.tipper}-${event.block.timestamp}`;
-    const tip = {
-      id: tipId,
-      roast: tokenId,
-      tipper: tipper.id,
-      amount: TIP_AMOUNT,
-      timestamp: BigInt(event.block.timestamp)
-    };
-    await context.Tip.set(tip);
-
-    // Update roast stats
-    roast.totalTips += TIP_AMOUNT;
-    roast.tipCount += 1;
-    
-    // Update roaster's balance (70% of tip)
-    roaster.contractBalance += (TIP_AMOUNT * BigInt(70)) / BigInt(100);
-    
-    // Update global stats
-    stats.totalTips += 1;
-    stats.totalVolume += TIP_AMOUNT;
-    
-    await context.Roast.set(roast);
-    await context.User.set(roaster);
+  // Update global stats
+  let stats = await context.GlobalStats.get("global");
+  if (stats) {
+    stats.totalWithdrawn = stats.totalWithdrawn + event.params.amount;
     await context.GlobalStats.set(stats);
   }
-});
 
-// Handle withdrawals
-Roasted.Withdrawal.handler(async ({ event, context }) => {
-  const user = await getOrCreateUser(context, event.params.user);
-  const stats = await getOrCreateGlobalStats(context);
-  
-  user.contractBalance -= BigInt(event.params.amount);
-  user.totalWithdrawn += BigInt(event.params.amount);
-  stats.totalWithdrawn += BigInt(event.params.amount);
-  
-  await context.User.set(user);
-  await context.GlobalStats.set(stats);
+  context.Roasted_Withdrawal.set(entity);
 });
