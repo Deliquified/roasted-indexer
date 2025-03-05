@@ -48,7 +48,7 @@ async function getOrCreateToken(tokenId: string, owner: string, context: any) {
 }
 
 Roasted.DataChanged.handler(async ({ event, context }) => {
-  const entity: Roasted_DataChanged = {
+  let entity: Roasted_DataChanged = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     dataKey: event.params.dataKey,
     dataValue: event.params.dataValue,
@@ -58,7 +58,7 @@ Roasted.DataChanged.handler(async ({ event, context }) => {
 });
 
 Roasted.OperatorAuthorizationChanged.handler(async ({ event, context }) => {
-  const entity: Roasted_OperatorAuthorizationChanged = {
+  let entity: Roasted_OperatorAuthorizationChanged = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     operator: event.params.operator,
     tokenOwner: event.params.tokenOwner,
@@ -70,7 +70,7 @@ Roasted.OperatorAuthorizationChanged.handler(async ({ event, context }) => {
 });
 
 Roasted.OperatorRevoked.handler(async ({ event, context }) => {
-  const entity: Roasted_OperatorRevoked = {
+  let entity: Roasted_OperatorRevoked = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     operator: event.params.operator,
     tokenOwner: event.params.tokenOwner,
@@ -83,7 +83,7 @@ Roasted.OperatorRevoked.handler(async ({ event, context }) => {
 });
 
 Roasted.OwnershipTransferred.handler(async ({ event, context }) => {
-  const entity: Roasted_OwnershipTransferred = {
+  let entity: Roasted_OwnershipTransferred = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     previousOwner: event.params.previousOwner,
     newOwner: event.params.newOwner,
@@ -93,7 +93,7 @@ Roasted.OwnershipTransferred.handler(async ({ event, context }) => {
 });
 
 Roasted.RoastPriceSet.handler(async ({ event, context }) => {
-  const entity: Roasted_RoastPriceSet = {
+  let entity: Roasted_RoastPriceSet = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     user: event.params.user,
     price: event.params.price,
@@ -103,9 +103,9 @@ Roasted.RoastPriceSet.handler(async ({ event, context }) => {
 });
 
 Roasted.RoastTipped.handler(async ({ event, context }) => {
-  const roaster = await getOrCreateUser(event.params.roaster, context);
-  const token = await getOrCreateToken(event.params.tokenId.toString(), event.params.roaster, context);
-  const roast = await context.Roast.get(event.params.tokenId.toString());
+  let roaster = await getOrCreateUser(event.params.roaster, context);
+  let token = await getOrCreateToken(event.params.tokenId.toString(), event.params.roaster, context);
+  let roast = await context.Roast.get(event.params.tokenId.toString());
 
   if (!roast) {
     console.log(`Warning: Roast ${event.params.tokenId.toString()} not found for tip`);
@@ -131,7 +131,7 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
   await context.Roast.set(roast);
 
   // Store the tip event
-  const tip = {
+  let tip = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     token: event.params.tokenId.toString(),
     tipper: event.params.tipper,
@@ -146,7 +146,7 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
   await context.Tip.set(tip);
 
   // Store the event entity
-  const entity: Roasted_RoastTipped = {
+  let entity: Roasted_RoastTipped = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     tokenId: event.params.tokenId,
     tipper: event.params.tipper,
@@ -158,7 +158,7 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
 });
 
 Roasted.TokenIdDataChanged.handler(async ({ event, context }) => {
-  const entity: Roasted_TokenIdDataChanged = {
+  let entity: Roasted_TokenIdDataChanged = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     tokenId: event.params.tokenId,
     dataKey: event.params.dataKey,
@@ -169,7 +169,7 @@ Roasted.TokenIdDataChanged.handler(async ({ event, context }) => {
 });
 
 Roasted.Transfer.handler(async ({ event, context }) => {
-  const token = await getOrCreateToken(event.params.tokenId.toString(), event.params.to, context);
+  let token = await getOrCreateToken(event.params.tokenId.toString(), event.params.to, context);
   
   // Update token ownership
   token.owner = event.params.to;
@@ -178,7 +178,7 @@ Roasted.Transfer.handler(async ({ event, context }) => {
 
   await context.RoastedToken.set(token);
 
-  const entity: Roasted_Transfer = {
+  let entity: Roasted_Transfer = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     operator: event.params.operator,
     from: event.params.from,
@@ -192,7 +192,7 @@ Roasted.Transfer.handler(async ({ event, context }) => {
 });
 
 Roasted.UserRoasted.handler(async ({ event, context }) => {
-  const roaster = await getOrCreateUser(event.params.roaster, context);
+  let roaster = await getOrCreateUser(event.params.roaster, context);
 
   // Update roaster's contract balance from the roast payment
   roaster.currentBalance = roaster.currentBalance + event.params.amount;
@@ -202,7 +202,7 @@ Roasted.UserRoasted.handler(async ({ event, context }) => {
   await context.User.set(roaster);
 
   // Store the roast event
-  const entity: Roasted_UserRoasted = {
+  let entity: Roasted_UserRoasted = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     roaster: event.params.roaster,
     roastee: event.params.roastee,
@@ -213,7 +213,7 @@ Roasted.UserRoasted.handler(async ({ event, context }) => {
 });
 
 Roasted.Withdrawal.handler(async ({ event, context }) => {
-  const user = await getOrCreateUser(event.params.user, context);
+  let user = await getOrCreateUser(event.params.user, context);
 
   // Update user's contract balance and total withdrawn
   user.currentBalance = user.currentBalance - event.params.amount;
@@ -224,7 +224,7 @@ Roasted.Withdrawal.handler(async ({ event, context }) => {
   await context.User.set(user);
 
   // Store the withdrawal event
-  const withdrawal = {
+  let withdrawal = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     user: event.params.user,
     amount: event.params.amount,
@@ -236,7 +236,7 @@ Roasted.Withdrawal.handler(async ({ event, context }) => {
   await context.Withdrawal.set(withdrawal);
 
   // Store the event entity
-  const entity: Roasted_Withdrawal = {
+  let entity: Roasted_Withdrawal = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     user: event.params.user,
     amount: event.params.amount,
