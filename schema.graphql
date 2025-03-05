@@ -1,0 +1,112 @@
+type Roasted_DataChanged {
+  id: ID!
+  dataKey: String!
+  dataValue: String!
+}
+
+type Roasted_OperatorAuthorizationChanged {
+  id: ID!
+  operator: String!
+  tokenOwner: String!
+  tokenId: String!
+  operatorNotificationData: String!
+}
+
+type Roasted_OperatorRevoked {
+  id: ID!
+  operator: String!
+  tokenOwner: String!
+  tokenId: String!
+  notified: Boolean!
+  operatorNotificationData: String!
+}
+
+type Roasted_OwnershipTransferred {
+  id: ID!
+  previousOwner: String!
+  newOwner: String!
+}
+
+type Roasted_RoastPriceSet {
+  id: ID!
+  user: String!
+  price: BigInt!
+}
+
+type Roasted_RoastTipped {
+  id: ID!
+  tokenId: String!
+  tipper: String!
+  roaster: String!
+  amount: BigInt!
+}
+
+type Roasted_TokenIdDataChanged {
+  id: ID!
+  tokenId: String!
+  dataKey: String!
+  dataValue: String!
+}
+
+type Roasted_Transfer {
+  id: ID!
+  operator: String!
+  from: String!
+  to: String!
+  tokenId: String!
+  force: Boolean!
+  data: String!
+}
+
+type Roasted_UserRoasted {
+  id: ID!
+  roaster: String!
+  roastee: String!
+  amount: BigInt!
+}
+
+type Roasted_Withdrawal {
+  id: ID!
+  user: String!
+  amount: BigInt!
+}
+
+type User @entity {
+  id: String! # user address
+  timesRoasted: Int! # times this user was roasted
+  timesRoasting: Int! # times this user roasted others
+  nftBalance: Int! # number of NFTs held
+  contractBalance: BigInt! # balance in the contract
+  totalWithdrawn: BigInt! # total amount withdrawn
+  roastPrice: BigInt! # price to roast this user
+  roastsReceived: [Roast!]! @derivedFrom(field: "roastee")
+  roastsGiven: [Roast!]! @derivedFrom(field: "roaster")
+}
+
+type RoastMetadata @entity {
+  id: String! # tokenId + dataKey
+  roast: Roast! # reference to the roast
+  dataKey: String! # the metadata key
+  dataValue: String! # the metadata value
+}
+
+type Roast @entity {
+  id: String! # tokenId
+  roaster: User! # address of who created the roast
+  roastee: User! # address of who got roasted
+  owner: User! # current owner of the NFT
+  metadata: [RoastMetadata!]! @derivedFrom(field: "roast") # all metadata key-value pairs
+  totalTips: BigInt! # total amount of tips received
+  tipCount: Int! # number of times this roast was tipped
+  createdAt: BigInt! # timestamp when roast was created
+  amount: BigInt! # amount paid for the roast
+}
+
+type GlobalStats @entity {
+  id: String! # "global"
+  totalRoasts: Int!
+  totalTips: Int!
+  totalVolume: BigInt!
+  totalWithdrawn: BigInt!
+}
+

@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: envio-indexer
+networks:
+- id: 42
+  start_block: 0
+  contracts:
+  - name: Roasted
+    address:
+    - 0x2A010a3dBD0760099Da8A87E090899E68BA6285d
+    handler: src/EventHandlers.ts
+    events:
+    - event: DataChanged(bytes32 indexed dataKey, bytes dataValue)
+    - event: OperatorAuthorizationChanged(address indexed operator, address indexed tokenOwner, bytes32 indexed tokenId, bytes operatorNotificationData)
+    - event: OperatorRevoked(address indexed operator, address indexed tokenOwner, bytes32 indexed tokenId, bool notified, bytes operatorNotificationData)
+    - event: OwnershipTransferred(address indexed previousOwner, address indexed newOwner)
+    - event: RoastPriceSet(address indexed user, uint256 price)
+    - event: RoastTipped(bytes32 indexed tokenId, address indexed tipper, address indexed roaster, uint256 amount)
+    - event: TokenIdDataChanged(bytes32 indexed tokenId, bytes32 indexed dataKey, bytes dataValue)
+    - event: Transfer(address operator, address indexed from, address indexed to, bytes32 indexed tokenId, bool force, bytes data)
+    - event: UserRoasted(address indexed roaster, address indexed roastee, uint256 amount)
+    - event: Withdrawal(address indexed user, uint256 amount)
