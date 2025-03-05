@@ -3,38 +3,13 @@
  */
 import { Roasted } from "generated";
 
-// Types for our event handlers
-type EventContext = {
-  User: {
-    get: (id: string) => Promise<any>;
-    set: (entity: any) => Promise<void>;
-  };
-  Roast: {
-    get: (id: string) => Promise<any>;
-    set: (entity: any) => Promise<void>;
-  };
-  RoastMetadata: {
-    get: (id: string) => Promise<any>;
-    set: (entity: any) => Promise<void>;
-  };
-  GlobalStats: {
-    get: (id: string) => Promise<any>;
-    set: (entity: any) => Promise<void>;
-  };
-};
-
-type EventType = {
-  chainId: string;
-  block: {
-    number: number;
-    timestamp: number;
-  };
-  logIndex: number;
-  params: any;
-};
+// Constants
+const LSP4_METADATA_KEY = "0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const TIP_AMOUNT = BigInt("10000000000000000"); // 0.01 ether
 
 // Helper function to get or create a user
-async function getOrCreateUser(context: EventContext, address: string) {
+async function getOrCreateUser(context: any, address: string) {
   let user = await context.User.get(address);
   if (!user) {
     user = {
@@ -52,7 +27,7 @@ async function getOrCreateUser(context: EventContext, address: string) {
 }
 
 // Helper function to get or create global stats
-async function getOrCreateGlobalStats(context: EventContext) {
+async function getOrCreateGlobalStats(context: any) {
   let stats = await context.GlobalStats.get("global");
   if (!stats) {
     stats = {
@@ -73,14 +48,14 @@ function bytes32ToHex(bytes32: string): string {
 }
 
 // Handle roast price updates
-Roasted.RoastPriceSet.handler(async ({ event, context }: { event: EventType; context: EventContext }) => {
+Roasted.RoastPriceSet.handler(async ({ event, context }) => {
   const user = await getOrCreateUser(context, event.params.user);
   user.roastPrice = BigInt(event.params.price);
   await context.User.set(user);
 });
 
 // Handle new roasts
-Roasted.UserRoasted.handler(async ({ event, context }: { event: EventType; context: EventContext }) => {
+Roasted.UserRoasted.handler(async ({ event, context }) => {
   const roaster = await getOrCreateUser(context, event.params.roaster);
   const roastee = await getOrCreateUser(context, event.params.roastee);
   const stats = await getOrCreateGlobalStats(context);
@@ -99,6 +74,7 @@ Roasted.UserRoasted.handler(async ({ event, context }: { event: EventType; conte
     roaster: roaster.id,
     roastee: roastee.id,
     owner: roaster.id,
+    ipfsHash: "",
     totalTips: BigInt(0),
     tipCount: 0,
     createdAt: BigInt(event.block.timestamp),
@@ -117,12 +93,12 @@ Roasted.UserRoasted.handler(async ({ event, context }: { event: EventType; conte
 });
 
 // Handle NFT transfers
-Roasted.Transfer.handler(async ({ event, context }: { event: EventType; context: EventContext }) => {
+Roasted.Transfer.handler(async ({ event, context }) => {
   const from = await getOrCreateUser(context, event.params.from);
   const to = await getOrCreateUser(context, event.params.to);
   
   // Update NFT balances
-  if (from.id !== "0x0000000000000000000000000000000000000000") {
+  if (from.id !== ZERO_ADDRESS) {
     from.nftBalance -= 1;
     await context.User.set(from);
   }
@@ -139,57 +115,52 @@ Roasted.Transfer.handler(async ({ event, context }: { event: EventType; context:
 });
 
 // Handle metadata updates
-Roasted.TokenIdDataChanged.handler(async ({ event, context }: { event: EventType; context: EventContext }) => {
+Roasted.TokenIdDataChanged.handler(async ({ event, context }) => {
   const tokenId = event.params.tokenId.toString();
   const dataKey = bytes32ToHex(event.params.dataKey);
-  const dataValue = event.params.dataValue;
 
-  // Create unique ID for metadata entry
-  const metadataId = `${tokenId}-${dataKey}`;
-
-  // Get or create the roast
-  let roast = await context.Roast.get(tokenId);
-  if (!roast) {
-    // If roast doesn't exist yet (metadata set before mint), create a placeholder
-    roast = {
-      id: tokenId,
-      roaster: "0x0000000000000000000000000000000000000000", // Will be set during mint
-      roastee: "0x0000000000000000000000000000000000000000", // Will be set during mint
-      owner: "0x0000000000000000000000000000000000000000", // Will be set during mint
-      totalTips: BigInt(0),
-      tipCount: 0,
-      createdAt: BigInt(event.block.timestamp),
-      amount: BigInt(0)
-    };
-    await context.Roast.set(roast);
+  // Only process LSP4 metadata updates
+  if (dataKey === LSP4_METADATA_KEY) {
+    // Get or create the roast
+    let roast = await context.Roast.get(tokenId);
+    if (roast) {
+      // Update IPFS hash
+      roast.ipfsHash = event.params.dataValue;
+      await context.Roast.set(roast);
+    }
   }
-
-  // Create or update metadata entry
-  const metadata = {
-    id: metadataId,
-    roast: tokenId,
-    dataKey: dataKey,
-    dataValue: dataValue
-  };
-  await context.RoastMetadata.set(metadata);
 });
 
-// Handle tips
-Roasted.RoastTipped.handler(async ({ event, context }: { event: EventType; context: EventContext }) => {
-  const roast = await context.Roast.get(event.params.tokenId.toString());
+// Handle tips with more detailed tracking
+Roasted.RoastTipped.handler(async ({ event, context }) => {
+  const tokenId = event.params.tokenId.toString();
+  const roast = await context.Roast.get(tokenId);
   const roaster = await getOrCreateUser(context, event.params.roaster);
+  const tipper = await getOrCreateUser(context, event.params.tipper);
   const stats = await getOrCreateGlobalStats(context);
   
   if (roast) {
-    roast.totalTips += BigInt(event.params.amount);
+    // Create new tip record
+    const tipId = `${tokenId}-${event.params.tipper}-${event.block.timestamp}`;
+    const tip = {
+      id: tipId,
+      roast: tokenId,
+      tipper: tipper.id,
+      amount: TIP_AMOUNT,
+      timestamp: BigInt(event.block.timestamp)
+    };
+    await context.Tip.set(tip);
+
+    // Update roast stats
+    roast.totalTips += TIP_AMOUNT;
     roast.tipCount += 1;
     
     // Update roaster's balance (70% of tip)
-    roaster.contractBalance += (BigInt(event.params.amount) * BigInt(70)) / BigInt(100);
+    roaster.contractBalance += (TIP_AMOUNT * BigInt(70)) / BigInt(100);
     
     // Update global stats
     stats.totalTips += 1;
-    stats.totalVolume += BigInt(event.params.amount);
+    stats.totalVolume += TIP_AMOUNT;
     
     await context.Roast.set(roast);
     await context.User.set(roaster);
@@ -198,7 +169,7 @@ Roasted.RoastTipped.handler(async ({ event, context }: { event: EventType; conte
 });
 
 // Handle withdrawals
-Roasted.Withdrawal.handler(async ({ event, context }: { event: EventType; context: EventContext }) => {
+Roasted.Withdrawal.handler(async ({ event, context }) => {
   const user = await getOrCreateUser(context, event.params.user);
   const stats = await getOrCreateGlobalStats(context);
   

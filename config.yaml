@@ -2,7 +2,7 @@
 name: envio-indexer
 networks:
 - id: 42
-  start_block: 0
+  start_block: 4523901
   contracts:
   - name: Roasted
     address:

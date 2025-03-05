@@ -90,12 +90,21 @@ type RoastMetadata @entity {
   dataValue: String! # the metadata value
 }
 
+type Tip @entity {
+  id: String! # tokenId + tipper + timestamp
+  roast: Roast! # reference to the roast
+  tipper: User! # who tipped
+  amount: BigInt! # tip amount (0.01 LYX)
+  timestamp: BigInt! # when the tip was made
+}
+
 type Roast @entity {
   id: String! # tokenId
-  roaster: User! # address of who created the roast
+  roaster: User! # address of who created the roast (msg.sender)
   roastee: User! # address of who got roasted
   owner: User! # current owner of the NFT
-  metadata: [RoastMetadata!]! @derivedFrom(field: "roast") # all metadata key-value pairs
+  ipfsHash: String! # IPFS hash for off-chain metadata
+  tips: [Tip!]! @derivedFrom(field: "roast") # all tips received
   totalTips: BigInt! # total amount of tips received
   tipCount: Int! # number of times this roast was tipped
   createdAt: BigInt! # timestamp when roast was created
