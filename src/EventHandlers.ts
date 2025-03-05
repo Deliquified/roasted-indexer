@@ -108,23 +108,31 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
   let roast = await context.Roast.get(event.params.tokenId.toString());
 
   if (!roast) {
-    console.log(`Warning: Roast ${event.params.tokenId.toString()} not found for tip`);
     return;
   }
 
   // Update roaster's contract balance from the tip
-  roaster.currentBalance = roaster.currentBalance + event.params.amount;
-  roaster.lastUpdatedBlock = event.block.number;
-  roaster.lastUpdatedTimestamp = event.block.timestamp;
+  roaster = {
+    ...roaster,
+    currentBalance: roaster.currentBalance + event.params.amount,
+    lastUpdatedBlock: event.block.number,
+    lastUpdatedTimestamp: event.block.timestamp,
+  };
 
   // Update token's tip stats
-  token.totalTipsReceived = token.totalTipsReceived + event.params.amount;
-  token.lastUpdatedBlock = event.block.number;
-  token.lastUpdatedTimestamp = event.block.timestamp;
+  token = {
+    ...token,
+    totalTipsReceived: token.totalTipsReceived + event.params.amount,
+    lastUpdatedBlock: event.block.number,
+    lastUpdatedTimestamp: event.block.timestamp,
+  };
 
   // Update roast's tip stats
-  roast.totalTips = roast.totalTips + event.params.amount;
-  roast.tipCount = roast.tipCount + 1;
+  roast = {
+    ...roast,
+    totalTips: roast.totalTips + event.params.amount,
+    tipCount: roast.tipCount + 1,
+  };
 
   await context.User.set(roaster);
   await context.RoastedToken.set(token);
@@ -133,14 +141,13 @@ Roasted.RoastTipped.handler(async ({ event, context }) => {
   // Store the tip event
   let tip = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
-    token: event.params.tokenId.toString(),
-    tipper: event.params.tipper,
+    token_id: event.params.tokenId.toString(),
+    tipper_id: event.params.tipper,
     roaster: event.params.roaster,
     amount: event.params.amount,
     blockNumber: event.block.number,
     timestamp: event.block.timestamp,
-    transactionHash: event.transaction.hash,
-    roast: event.params.tokenId.toString(),
+    roast_id: event.params.tokenId.toString(),
   };
 
   await context.Tip.set(tip);
@@ -216,21 +223,23 @@ Roasted.Withdrawal.handler(async ({ event, context }) => {
   let user = await getOrCreateUser(event.params.user, context);
 
   // Update user's contract balance and total withdrawn
-  user.currentBalance = user.currentBalance - event.params.amount;
-  user.totalWithdrawn = user.totalWithdrawn + event.params.amount;
-  user.lastUpdatedBlock = event.block.number;
-  user.lastUpdatedTimestamp = event.block.timestamp;
+  user = {
+    ...user,
+    currentBalance: user.currentBalance - event.params.amount,
+    totalWithdrawn: user.totalWithdrawn + event.params.amount,
+    lastUpdatedBlock: event.block.number,
+    lastUpdatedTimestamp: event.block.timestamp,
+  };
 
   await context.User.set(user);
 
   // Store the withdrawal event
   let withdrawal = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
-    user: event.params.user,
+    user_id: event.params.user,
     amount: event.params.amount,
     blockNumber: event.block.number,
     timestamp: event.block.timestamp,
-    transactionHash: event.transaction.hash,
   };
 
   await context.Withdrawal.set(withdrawal);
