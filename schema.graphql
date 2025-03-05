@@ -102,7 +102,6 @@ type Tip @entity {
   amount: BigInt!
   blockNumber: Int!
   timestamp: Int!
-  transactionHash: String!
   roast: Roast! # Add reference to the roast
 }
 
@@ -133,7 +132,6 @@ type Withdrawal @entity {
   amount: BigInt!
   blockNumber: Int!
   timestamp: Int!
-  transactionHash: String!
 }
 
 type RoastedToken @entity {
