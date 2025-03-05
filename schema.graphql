@@ -72,15 +72,13 @@ type Roasted_Withdrawal {
 }
 
 type User @entity {
-  id: String! # user address
-  timesRoasted: Int! # times this user was roasted
-  timesRoasting: Int! # times this user roasted others
-  nftBalance: Int! # number of NFTs held
-  contractBalance: BigInt! # balance in the contract
-  totalWithdrawn: BigInt! # total amount withdrawn
-  roastPrice: BigInt! # price to roast this user
-  roastsReceived: [Roast!]! @derivedFrom(field: "roastee")
-  roastsGiven: [Roast!]! @derivedFrom(field: "roaster")
+  id: ID! # user address
+  currentBalance: BigInt!
+  totalWithdrawn: BigInt!
+  withdrawals: [Withdrawal!]! @derivedFrom(field: "user")
+  tipsGiven: [Tip!]! @derivedFrom(field: "tipper")
+  lastUpdatedBlock: Int!
+  lastUpdatedTimestamp: Int!
 }
 
 type RoastMetadata @entity {
@@ -91,11 +89,14 @@ type RoastMetadata @entity {
 }
 
 type Tip @entity {
-  id: String! # tokenId + tipper + timestamp
-  roast: Roast! # reference to the roast
-  tipper: User! # who tipped
-  amount: BigInt! # tip amount (0.01 LYX)
-  timestamp: BigInt! # when the tip was made
+  id: ID! # tx hash + log index
+  token: RoastedToken!
+  tipper: User!
+  roaster: String!
+  amount: BigInt!
+  blockNumber: Int!
+  timestamp: Int!
+  transactionHash: String!
 }
 
 type Roast @entity {
@@ -118,4 +119,30 @@ type GlobalStats @entity {
   totalVolume: BigInt!
   totalWithdrawn: BigInt!
 }
+
+type Withdrawal @entity {
+  id: ID! # tx hash + log index
+  user: User!
+  amount: BigInt!
+  blockNumber: Int!
+  timestamp: Int!
+  transactionHash: String!
+}
+
+type RoastedToken @entity {
+  id: ID! # tokenId
+  totalTipsReceived: BigInt!
+  tipsReceived: [Tip!]! @derivedFrom(field: "token")
+  owner: String!
+  lastUpdatedBlock: Int!
+  lastUpdatedTimestamp: Int!
+}
+
+type _Schema_
+  @fulltext(
+    name: "userSearch"
+    language: en
+    algorithm: rank
+    include: [{ entity: "User", fields: [{ name: "id" }] }]
+  )
 

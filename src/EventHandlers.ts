@@ -13,8 +13,39 @@ import {
   Roasted_Transfer,
   Roasted_UserRoasted,
   Roasted_Withdrawal,
-  User
 } from "generated";
+
+// Helper function to load or create a User entity
+async function getOrCreateUser(address: string, context: any) {
+  let user = await context.User.get(address);
+  if (!user) {
+    user = {
+      id: address,
+      currentBalance: BigInt(0),
+      totalWithdrawn: BigInt(0),
+      lastUpdatedBlock: 0,
+      lastUpdatedTimestamp: 0,
+    };
+    await context.User.set(user);
+  }
+  return user;
+}
+
+// Helper function to load or create a RoastedToken entity
+async function getOrCreateToken(tokenId: string, owner: string, context: any) {
+  let token = await context.RoastedToken.get(tokenId);
+  if (!token) {
+    token = {
+      id: tokenId,
+      totalTipsReceived: BigInt(0),
+      owner: owner,
+      lastUpdatedBlock: 0,
+      lastUpdatedTimestamp: 0,
+    };
+    await context.RoastedToken.set(token);
+  }
+  return token;
+}
 
 Roasted.DataChanged.handler(async ({ event, context }) => {
   const entity: Roasted_DataChanged = {
@@ -72,6 +103,37 @@ Roasted.RoastPriceSet.handler(async ({ event, context }) => {
 });
 
 Roasted.RoastTipped.handler(async ({ event, context }) => {
+  const roaster = await getOrCreateUser(event.params.roaster, context);
+  const token = await getOrCreateToken(event.params.tokenId.toString(), event.params.roaster, context);
+
+  // Update roaster's contract balance from the tip
+  roaster.currentBalance = roaster.currentBalance + event.params.amount;
+  roaster.lastUpdatedBlock = event.block.number;
+  roaster.lastUpdatedTimestamp = event.block.timestamp;
+
+  // Update token's tip stats
+  token.totalTipsReceived = token.totalTipsReceived + event.params.amount;
+  token.lastUpdatedBlock = event.block.number;
+  token.lastUpdatedTimestamp = event.block.timestamp;
+
+  await context.User.set(roaster);
+  await context.RoastedToken.set(token);
+
+  // Store the tip event
+  const tip = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    token: event.params.tokenId.toString(),
+    tipper: event.params.tipper,
+    roaster: event.params.roaster,
+    amount: event.params.amount,
+    blockNumber: event.block.number,
+    timestamp: event.block.timestamp,
+    transactionHash: event.transaction.hash,
+  };
+
+  await context.Tip.set(tip);
+
+  // Store the event entity
   const entity: Roasted_RoastTipped = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     tokenId: event.params.tokenId,
@@ -94,60 +156,40 @@ Roasted.TokenIdDataChanged.handler(async ({ event, context }) => {
   context.Roasted_TokenIdDataChanged.set(entity);
 });
 
-// Helper function to get or create a User entity
-async function getOrCreateUser(context: any, address: string): Promise<User> {
-  let user = await context.User.get(address);
-  if (!user) {
-    user = {
-      id: address,
-      timesRoasted: 0,
-      timesRoasting: 0,
-      nftBalance: 0,
-      contractBalance: BigInt(0),
-      totalWithdrawn: BigInt(0),
-      roastPrice: BigInt(0)
-    };
-  }
-  return user;
-}
-
-// Handle Transfer events to track NFT balances
 Roasted.Transfer.handler(async ({ event, context }) => {
-  // Create the transfer event entity
-  const transferEntity: Roasted_Transfer = {
+  const token = await getOrCreateToken(event.params.tokenId.toString(), event.params.to, context);
+  
+  // Update token ownership
+  token.owner = event.params.to;
+  token.lastUpdatedBlock = event.block.number;
+  token.lastUpdatedTimestamp = event.block.timestamp;
+
+  await context.RoastedToken.set(token);
+
+  const entity: Roasted_Transfer = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     operator: event.params.operator,
     from: event.params.from,
     to: event.params.to,
     tokenId: event.params.tokenId,
     force: event.params.force,
-    data: event.params.data
+    data: event.params.data,
   };
-  
-  // Save the transfer event
-  context.Roasted_Transfer.set(transferEntity);
 
-  // Update balances for sender (if not minting)
-  if (event.params.from !== "0x0000000000000000000000000000000000000000") {
-    const fromUser = await getOrCreateUser(context, event.params.from);
-    fromUser.nftBalance -= 1;
-    context.User.set(fromUser);
-  }
-
-  // Update balances for receiver
-  const toUser = await getOrCreateUser(context, event.params.to);
-  toUser.nftBalance += 1;
-  context.User.set(toUser);
-
-  // Update Roast ownership if it exists
-  const roast = await context.Roast.get(event.params.tokenId);
-  if (roast) {
-    roast.owner = toUser;
-    context.Roast.set(roast);
-  }
+  context.Roasted_Transfer.set(entity);
 });
 
 Roasted.UserRoasted.handler(async ({ event, context }) => {
+  const roaster = await getOrCreateUser(event.params.roaster, context);
+
+  // Update roaster's contract balance from the roast payment
+  roaster.currentBalance = roaster.currentBalance + event.params.amount;
+  roaster.lastUpdatedBlock = event.block.number;
+  roaster.lastUpdatedTimestamp = event.block.timestamp;
+
+  await context.User.set(roaster);
+
+  // Store the roast event
   const entity: Roasted_UserRoasted = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     roaster: event.params.roaster,
@@ -159,6 +201,29 @@ Roasted.UserRoasted.handler(async ({ event, context }) => {
 });
 
 Roasted.Withdrawal.handler(async ({ event, context }) => {
+  const user = await getOrCreateUser(event.params.user, context);
+
+  // Update user's contract balance and total withdrawn
+  user.currentBalance = user.currentBalance - event.params.amount;
+  user.totalWithdrawn = user.totalWithdrawn + event.params.amount;
+  user.lastUpdatedBlock = event.block.number;
+  user.lastUpdatedTimestamp = event.block.timestamp;
+
+  await context.User.set(user);
+
+  // Store the withdrawal event
+  const withdrawal = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    user: event.params.user,
+    amount: event.params.amount,
+    blockNumber: event.block.number,
+    timestamp: event.block.timestamp,
+    transactionHash: event.transaction.hash,
+  };
+
+  await context.Withdrawal.set(withdrawal);
+
+  // Store the event entity
   const entity: Roasted_Withdrawal = {
     id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
     user: event.params.user,
