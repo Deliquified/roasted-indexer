@@ -71,7 +71,13 @@ type Roasted_Withdrawal {
   amount: BigInt!
 }
 
-type User @entity {
+type User @entity
+  @fulltext(
+    name: "userSearch"
+    language: en
+    algorithm: rank
+    include: [{ entity: "User", fields: [{ name: "id" }] }]
+  ) {
   id: ID! # user address
   currentBalance: BigInt!
   totalWithdrawn: BigInt!
@@ -137,12 +143,4 @@ type RoastedToken @entity {
   lastUpdatedBlock: Int!
   lastUpdatedTimestamp: Int!
 }
-
-type _Schema_
-  @fulltext(
-    name: "userSearch"
-    language: en
-    algorithm: rank
-    include: [{ entity: "User", fields: [{ name: "id" }] }]
-  )
 
